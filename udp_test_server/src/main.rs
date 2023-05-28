@@ -47,10 +47,11 @@ fn main() -> anyhow::Result<()> {
                 log.push(match str::from_utf8(&buf[..rx_count]) {
                     Ok(buf_string) => match SocketAddr::from_str(&buf_string) {
                         Ok(buf_addr) => format!(
-                            "{} vs {}: {}",
+                            "{} vs {}: {}. Msg: {}",
                             src_addr.port(),
                             buf_addr.port(),
-                            src_addr.port() == buf_addr.port()
+                            src_addr.port() == buf_addr.port(),
+                            buf_string,
                         ),
                         Err(_) => format!("String '{}''", buf_string),
                     },
