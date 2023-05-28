@@ -57,7 +57,7 @@ fn main() -> anyhow::Result<()> {
                     Err(_) => format!("Bytes {:?}", &buf[..rx_count]),
                 });
 
-                info!("{}", log.join("\n"));
+                info!("\n{}", log.join("\n"));
             }
         }));
     }
