@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
                         "Rx on {}: src_port = {}, msg = {}",
                         port,
                         src_addr.port(),
-                        buf_string
+                        buf_string.trim()
                     ),
                     Err(e) => warn!("Failed to decode to string: {e}"),
                 }
