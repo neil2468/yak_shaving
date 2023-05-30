@@ -1,24 +1,16 @@
 use clap::Parser;
 use std::{
     net::{SocketAddr, UdpSocket},
-    str::{self, FromStr},
-    thread,
+    str, thread,
 };
-use tracing::{info, Level};
+use tracing::{info, warn, Level};
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-struct Args {
-    #[arg(long, default_value_t = 4000)]
-    port1: u16,
+struct Args {}
 
-    #[arg(long, default_value_t = 4001)]
-    port2: u16,
-
-    #[arg(long, default_value_t = 4002)]
-    port3: u16,
-}
+const START_PORT: u16 = 5000;
+const END_PORT: u16 = 5999;
 
 fn main() -> anyhow::Result<()> {
     // Set tracing level
@@ -32,33 +24,28 @@ fn main() -> anyhow::Result<()> {
 
     let mut join_handles = vec![];
 
-    for port in [args.port1, args.port2, args.port3] {
+    info!("Binding to ports {START_PORT}..={END_PORT}");
+
+    for port in START_PORT..=END_PORT {
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
         join_handles.push(thread::spawn(move || -> anyhow::Result<()> {
-            info!("Binding to {:?}", addr);
             let socket = UdpSocket::bind(addr)?;
+            assert_eq!(port, socket.local_addr().unwrap().port());
+
             let mut buf = [0; 1024];
+
             loop {
                 let (rx_count, src_addr) = socket.recv_from(&mut buf)?;
 
-                let mut log = vec![];
-                log.push(format!("Rx'ed from {:?} via {:?}", src_addr, addr));
-
-                log.push(match str::from_utf8(&buf[..rx_count]) {
-                    Ok(buf_string) => match SocketAddr::from_str(&buf_string) {
-                        Ok(buf_addr) => format!(
-                            "{} vs {}: {}. Msg: {}",
-                            src_addr.port(),
-                            buf_addr.port(),
-                            src_addr.port() == buf_addr.port(),
-                            buf_string,
-                        ),
-                        Err(_) => format!("String '{}''", buf_string),
-                    },
-                    Err(_) => format!("Bytes {:?}", &buf[..rx_count]),
-                });
-
-                info!("\n{}", log.join("\n"));
+                match str::from_utf8(&buf[..rx_count]) {
+                    Ok(buf_string) => info!(
+                        "Rx on {}: src_port = {}, msg = {}",
+                        port,
+                        src_addr.port(),
+                        buf_string
+                    ),
+                    Err(e) => warn!("Failed to decode to string: {e}"),
+                }
             }
         }));
     }

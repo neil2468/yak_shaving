@@ -3,6 +3,7 @@ use std::{
     net::{IpAddr, SocketAddr, UdpSocket},
     str::{self, FromStr},
     thread,
+    time::Duration,
 };
 use tracing::{info, Level};
 
@@ -12,15 +13,6 @@ use tracing::{info, Level};
 struct Args {
     #[arg(long = "server")]
     server_ip: String,
-
-    #[arg(long = "port1", default_value_t = 4000)]
-    port1: u16,
-
-    #[arg(long = "port2", default_value_t = 4001)]
-    port2: u16,
-
-    #[arg(long = "port3", default_value_t = 4002)]
-    port3: u16,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -33,18 +25,38 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     info!("Args: {:?}", args);
 
-    for port in [args.port1, args.port2, args.port3] {
-        let local_addr = SocketAddr::from(([0, 0, 0, 0], 0));
-        let socket = UdpSocket::bind(local_addr)?;
-        let local_addr = socket.local_addr()?;
+    an_b1(&args, 4000, 4019, 5000, Duration::ZERO)?;
+    an_b1(&args, 4020, 4029, 5010, Duration::from_millis(1000))?;
 
-        let tmp = local_addr.to_string();
-        let buf = tmp.as_bytes();
+    Ok(())
+}
 
-        socket.send_to(
-            buf,
-            SocketAddr::from((IpAddr::from_str(&args.server_ip)?, port)),
-        )?;
+fn tx_packet(mode: &str, socket: UdpSocket, dst_addr: SocketAddr) -> anyhow::Result<()> {
+    let orig_port = socket.local_addr()?.port();
+    let buf_string = format!("{}|{}|{}", mode, orig_port, dst_addr.port());
+    let buf = buf_string.as_bytes();
+    socket.send_to(buf, dst_addr)?;
+    Ok(()) // TODO: idiomatic would be to return result of socket send, but need to convert the error?
+}
+
+fn an_b1(
+    args: &Args,
+    a_start_port: u16,
+    a_end_port: u16,
+    b_port: u16,
+    delay: Duration,
+) -> anyhow::Result<()> {
+    let mode = format!("an_b1_d{}", delay.as_millis());
+    let dst_addr = SocketAddr::from((IpAddr::from_str(&args.server_ip)?, b_port));
+
+    for orig_port in a_start_port..=a_end_port {
+        let socket = UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], orig_port)))?;
+
+        tx_packet(&mode, socket, dst_addr)?;
+
+        if !delay.is_zero() {
+            thread::sleep(delay);
+        }
     }
 
     Ok(())
