@@ -19,50 +19,72 @@ fn main() -> anyhow::Result<()> {
 
     info!("Started");
 
-    let mut join_handles = vec![];
-    for port in [PUBLIC_PORT1, PUBLIC_PORT2] {
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
-        join_handles.push(thread::spawn(move || -> anyhow::Result<()> {
-            let socket = UdpSocket::bind(addr)?;
-            assert_eq!(port, socket.local_addr().unwrap().port());
+    let socket1 = UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], PUBLIC_PORT1)))?;
+    let socket2 = UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], PUBLIC_PORT2)))?;
 
-            let mut buf = [0; 1024];
+    let mut buf = [0; 1024];
+    let (rx_count, src_addr) = socket1.recv_from(&mut buf)?;
 
-            let mut delay = 10000;
-
-            loop {
-                let (rx_count, src_addr) = socket.recv_from(&mut buf)?;
-
-                match str::from_utf8(&buf[..rx_count]) {
-                    Ok(buf_string) => info!(
-                        "Rx on {}: src_port = {}, msg = {}",
-                        port,
-                        src_addr.port(),
-                        buf_string.trim()
-                    ),
-                    Err(e) => warn!("Failed to decode to string: {e}"),
-                }
-
-                if port == PUBLIC_PORT2 {
-                    loop {
-                        thread::sleep(Duration::from_millis(delay));
-                        info!(
-                            "Tx from {} to {} after {}mS",
-                            socket.local_addr()?,
-                            src_addr,
-                            delay
-                        );
-                        socket.send_to(MSG, src_addr)?;
-                        delay = delay + 10000;
-                    }
-                }
-            }
-        }));
+    match str::from_utf8(&buf[..rx_count]) {
+        Ok(buf_string) => info!(
+            "Rx on {}: src_port = {}, msg = {}",
+            PUBLIC_PORT1,
+            src_addr.port(),
+            buf_string.trim()
+        ),
+        Err(e) => warn!("Failed to decode to string: {e}"),
     }
 
-    for h in join_handles {
-        h.join().unwrap()?;
-    }
+    thread::sleep(Duration::from_millis(1000));
+
+    info!("Tx from {} to {}", socket2.local_addr()?, src_addr,);
+    socket2.send_to(MSG, src_addr)?;
+
+    // let mut join_handles = vec![];
+
+    // for port in [PUBLIC_PORT1, PUBLIC_PORT2] {
+    //     let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    //     join_handles.push(thread::spawn(move || -> anyhow::Result<()> {
+    //         let socket = UdpSocket::bind(addr)?;
+    //         assert_eq!(port, socket.local_addr().unwrap().port());
+
+    //         let mut buf = [0; 1024];
+
+    //         let mut delay = 10000;
+
+    //         loop {
+    //             let (rx_count, src_addr) = socket.recv_from(&mut buf)?;
+
+    //             match str::from_utf8(&buf[..rx_count]) {
+    //                 Ok(buf_string) => info!(
+    //                     "Rx on {}: src_port = {}, msg = {}",
+    //                     port,
+    //                     src_addr.port(),
+    //                     buf_string.trim()
+    //                 ),
+    //                 Err(e) => warn!("Failed to decode to string: {e}"),
+    //             }
+
+    //             if port == PUBLIC_PORT2 {
+    //                 loop {
+    //                     thread::sleep(Duration::from_millis(delay));
+    //                     info!(
+    //                         "Tx from {} to {} after {}mS",
+    //                         socket.local_addr()?,
+    //                         src_addr,
+    //                         delay
+    //                     );
+    //                     socket.send_to(MSG, src_addr)?;
+    //                     delay = delay + 10000;
+    //                 }
+    //             }
+    //         }
+    //     }));
+    // }
+
+    // for h in join_handles {
+    //     h.join().unwrap()?;
+    // }
 
     Ok(())
 }
