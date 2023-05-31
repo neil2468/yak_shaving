@@ -38,7 +38,7 @@ fn main() -> anyhow::Result<()> {
     // Listen to socket and send keep alives to one address
     loop {
         let mut recv_buf = [0; 1024];
-        for _ in 0..10 {
+        for _ in 0..30 {
             match socket.recv_from(&mut recv_buf) {
                 Ok((_, src_addr)) => info!("Rx from {}", src_addr),
                 Err(_) => (),

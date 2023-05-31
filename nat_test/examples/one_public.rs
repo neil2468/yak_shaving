@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
 
             let mut buf = [0; 1024];
 
-            let mut delay = 1000;
+            let mut delay = 10000;
 
             loop {
                 let (rx_count, src_addr) = socket.recv_from(&mut buf)?;
@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
                             delay
                         );
                         socket.send_to(MSG, src_addr)?;
-                        delay = delay + 1000;
+                        delay = delay + 10000;
                     }
                 }
             }
