@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
 
     // Send initial packets
     tx(&socket, &addr1)?;
-    //    tx(&socket, &addr2)?;
+    tx(&socket, &addr2)?;
 
     // Listen to socket and send keep alives to one address
     loop {
