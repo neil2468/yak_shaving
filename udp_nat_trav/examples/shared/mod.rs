@@ -1,7 +1,9 @@
 use tracing::Level;
 
-pub const PORT_BASE: u16 = 4000;
-pub const PORT_COUNT: u16 = 10;
+pub const ALPHA_PORT_BASE: u16 = 4000;
+pub const ALPHA_PORT_COUNT: u16 = 10;
+pub const BETA_PORT: u16 = 4010;
+pub const BETA_COUNT: usize = 10;
 
 // #[derive(Debug)]
 // pub enum Message {

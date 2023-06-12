@@ -51,26 +51,8 @@ impl PeerData {
         self.rx_events.len() >= threshold
     }
 
-    pub fn ip_stats(&self) -> HashMap<IpAddr, usize> {
-        let mut map = HashMap::new();
-        for (addr, _) in &self.rx_events {
-            map.entry(addr.ip())
-                .and_modify(|count| *count += 1)
-                .or_insert(1);
-        }
-        map
-    }
-
-    pub fn port_stats(&self, ip: &IpAddr) -> HashMap<u16, usize> {
-        let mut map = HashMap::new();
-        for (addr, _) in &self.rx_events {
-            if ip == &addr.ip() {
-                map.entry(addr.port())
-                    .and_modify(|count| *count += 1)
-                    .or_insert(1);
-            }
-        }
-        map
+    pub fn rx_events(&self) -> impl Iterator<Item = &SocketAddr> {
+        self.rx_events.iter().map(|(addr, _)| addr)
     }
 
     pub fn analysis(&self) -> impl Iterator<Item = (AlphaResult, usize)> {
@@ -131,17 +113,14 @@ impl AlphaManager {
         self.data.clone()
     }
 
-    pub fn spawn_tasks(&self) -> JoinSet<Result<(), anyhow::Error>> {
-        let mut set = JoinSet::new();
+    pub fn spawn_tasks(&self, join_set: &mut JoinSet<Result<(), anyhow::Error>>) {
         for port in PORTS {
             let data_clone = self.data.clone();
-            set.spawn(Self::port_listen_task(port, data_clone));
+            join_set.spawn(Self::port_listen_task(port, data_clone));
         }
 
         let data_clone = self.data.clone();
-        set.spawn(Self::caretaker_task(data_clone));
-
-        set
+        join_set.spawn(Self::caretaker_task(data_clone));
     }
 
     async fn caretaker_task(data: Arc<DashMap<String, PeerData>>) -> anyhow::Result<()> {

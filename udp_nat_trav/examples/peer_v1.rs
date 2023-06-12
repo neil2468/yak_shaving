@@ -24,10 +24,22 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     info!("Args: {:?}", args);
 
+    // Alpha tests
     let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
     let buf = args.id.as_bytes();
-    for port in shared::PORT_BASE..(shared::PORT_BASE + (shared::PORT_COUNT - 1)) {
+    for port in shared::ALPHA_PORT_BASE..(shared::ALPHA_PORT_BASE + shared::ALPHA_PORT_COUNT) {
         let addr = (args.server.clone(), port);
+        socket.send_to(buf, addr).await?;
+    }
+
+    // Beta tests
+    for _ in 0..shared::BETA_COUNT {
+        let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
+
+        let buf = format!("{}#{}", args.id, socket.local_addr().unwrap().port());
+        let buf = buf.as_bytes();
+
+        let addr = (args.server.clone(), shared::BETA_PORT);
         socket.send_to(buf, addr).await?;
     }
 
