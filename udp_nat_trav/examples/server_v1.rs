@@ -81,14 +81,12 @@ async fn monitor_task(
                 info!("    elapsed: {:?}", instant.elapsed());
             }
 
+            let analysis: Vec<_> = peer_data.analysis().collect();
             info!("    analysis...");
-            for x in peer_data.analysis() {
+            for x in &analysis {
                 info!("      {:?}", x);
             }
-            info!(
-                "    conclusion: {:?}",
-                peer_data.analysis().max_by_key(|x| x.1)
-            );
+            info!("    conclusion: {:?}", analysis.iter().max_by_key(|x| x.1));
 
             info!("    rx_events...");
             for event in peer_data.rx_events() {

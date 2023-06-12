@@ -65,7 +65,7 @@ impl PeerData {
             let test_count = self.test_count();
             let mut map: HashMap<SocketAddr, usize> = HashMap::new();
             for (addr, _) in &self.rx_events {
-                map.entry(addr.clone())
+                map.entry(*addr)
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
             }

@@ -77,8 +77,6 @@ impl PeerData {
                 map.entry(diff).and_modify(|count| *count += 1).or_insert(1);
             }
 
-            info!("XXX map: {:?}", map);
-
             // Did the NAT use the same port as its client?
             let confidence = if map.len() == 1 && map.keys().next().unwrap() == &0 {
                 100
@@ -106,28 +104,27 @@ impl PeerData {
             results.insert(BetaResult::SrcPortCloseToOrig, confidence);
 
             // Did the NAT use ports on a round robin basis?
+            let mut tmp: Vec<_> = self
+                .rx_events
+                .iter()
+                .map(|(addr, _, seq_num, _)| (addr, seq_num))
+                .collect();
+            tmp.sort_by_key(|x| x.1);
+            info!("XXX tmp: {:?}", tmp);
+            let mut diffs = Vec::with_capacity(tmp.len() - 1);
+            let mut iter = tmp.iter().map(|(&addr, _)| addr.port());
+            if let Some(mut prev) = iter.next() {
+                for next in iter {
+                    diffs.push(next.wrapping_sub(prev));
+                    prev = next;
+                }
+            }
 
-            // Did NAT use a narrow range of ports?
-            // TODO: this does not handle wrap around
-            // TODO: could optimize by using itertools?
-            let port_max = self
-                .rx_events
-                .iter()
-                .map(|(addr, _, _, _)| addr.port())
-                .max()
-                .unwrap();
-            let port_min = self
-                .rx_events
-                .iter()
-                .map(|(addr, _, _, _)| addr.port())
-                .min()
-                .unwrap();
-            let confidence = if (port_max - port_min) as usize == self.rx_events.len() {
-                100
-            } else {
-                0
-            };
-            results.insert(BetaResult::SrcPortNarrowRange, confidence);
+            info!("XXX diffs: {:?}", diffs);
+
+            let count = diffs.iter().filter(|&d| d <= &5000).count(); // TODO: magic number
+            let confidence = usize::checked_div(count * 100, diffs.len()).unwrap_or(0);
+            results.insert(BetaResult::SrcPortRoundRobin, confidence);
 
             // Did the NAT use random ports?
             // let count = match map.len() {
