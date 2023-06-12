@@ -92,7 +92,7 @@ impl PeerData {
             for (addr, count) in &map {
                 results.push((
                     AlphaResult::NatSrcConstant(addr.ip(), addr.port()),
-                    test_count * 100 / count,
+                    usize::checked_div(count * 100, test_count).unwrap_or(0),
                 ))
             }
 
@@ -101,7 +101,7 @@ impl PeerData {
 
             results.push((
                 AlphaResult::NatSrcInconstant,
-                usize::checked_div(test_count * 100, count).unwrap_or(0),
+                usize::checked_div(count * 100, test_count).unwrap_or(0),
             ));
         }
 
