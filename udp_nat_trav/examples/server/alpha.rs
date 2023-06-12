@@ -150,11 +150,10 @@ impl AlphaManager {
 
             // Delete expired data
             data.retain(|_, peer_data| {
-                false
-                    == peer_data
-                        .most_recent()
-                        .is_some_and(|i| i.elapsed() >= Duration::from_millis(3000))
-                // TODO: magic number
+                match peer_data.most_recent() {
+                    Some(instant) => instant.elapsed() < Duration::from_millis(3000), // TODO: magic number
+                    None => true,
+                }
             })
         }
     }
