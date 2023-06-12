@@ -58,7 +58,7 @@ impl PeerData {
     pub fn analysis(&self) -> impl Iterator<Item = (AlphaResult, usize)> {
         // (alpha_result, confidence 0..100)
         let mut results: Vec<(AlphaResult, usize)> = Vec::new(); //
-        results.push((AlphaResult::Inconclusive, THRESHOLD_PERCENT));
+        results.push((AlphaResult::Unknown, THRESHOLD_PERCENT));
 
         if self.test_complete() {
             // Prep work
@@ -73,7 +73,7 @@ impl PeerData {
             // Was the NAT source IP and port mostly the same
             for (addr, count) in &map {
                 results.push((
-                    AlphaResult::NatSrcConstant(addr.ip(), addr.port()),
+                    AlphaResult::SrcIpPortConstant(addr.ip(), addr.port()),
                     usize::checked_div(count * 100, test_count).unwrap_or(0),
                 ))
             }
@@ -82,7 +82,7 @@ impl PeerData {
             let count = map.iter().filter(|(_, &count)| count == 1).count();
 
             results.push((
-                AlphaResult::NatSrcInconstant,
+                AlphaResult::SrcIpPortInconstant,
                 usize::checked_div(count * 100, test_count).unwrap_or(0),
             ));
         }
@@ -93,9 +93,9 @@ impl PeerData {
 
 #[derive(Debug)]
 pub enum AlphaResult {
-    Inconclusive,
-    NatSrcInconstant,
-    NatSrcConstant(IpAddr, u16),
+    Unknown,
+    SrcIpPortInconstant,
+    SrcIpPortConstant(IpAddr, u16),
 }
 
 pub struct AlphaManager {

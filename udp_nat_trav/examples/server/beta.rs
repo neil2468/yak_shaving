@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     net::{Ipv4Addr, SocketAddr},
     str,
     sync::Arc,
@@ -61,20 +62,68 @@ impl PeerData {
 
     pub fn analysis(&self) -> impl Iterator<Item = (BetaResult, usize)> {
         // (alpha_result, confidence 0..100)
-        let mut results: Vec<(BetaResult, usize)> = Vec::new(); //
-        results.push((BetaResult::Inconclusive, THRESHOLD_PERCENT));
+        let mut results: HashMap<BetaResult, usize> = HashMap::new();
+        results.insert(BetaResult::Unknown, THRESHOLD_PERCENT);
 
         if self.test_complete() {
-            // TODO: all
+            // Prep work
+            let test_count = self.test_count();
+
+            // map: <nat_port - orig_port, count>
+            let mut map: HashMap<i32, usize> = HashMap::new();
+            for (addr, orig_port, _) in &self.rx_events {
+                let diff = addr.port() as i32 - *orig_port as i32;
+                map.entry(diff).and_modify(|count| *count += 1).or_insert(1);
+            }
+
+            info!("XXX map: {:?}", map);
+
+            // Did the NAT use the same port as its client?
+            let confidence = if map.len() == 1 && map.keys().next().unwrap() == &0 {
+                100
+            } else {
+                0
+            };
+            results.insert(BetaResult::SrcPortAsOrig, confidence);
+
+            // TODO: does this description make sense?
+            // Did the NAT use ports which were a constant difference from the client?
+            let confidence = if map.len() == 1 && map.keys().next().unwrap() != &0 {
+                100
+            } else {
+                0
+            };
+            results.insert(BetaResult::SrcPortConstantDiffToOrig, confidence);
+
+            // Did the NAT use ports close to what its client used?
+            let count: usize = map
+                .iter()
+                .filter(|(&k, _)| k != 0 && k.abs() <= 100)
+                .map(|(_, v)| v)
+                .sum(); // TODO: magic number
+            let confidence = usize::checked_div(count * 100, test_count).unwrap_or(0);
+            results.insert(BetaResult::SrcPortCloseToOrig, confidence);
+
+            // Did the NAT use random ports?
+            let count = match map.len() {
+                0 | 1 => 0,
+                l => l,
+            };
+            let confidence = usize::checked_div(count * 100, test_count).unwrap_or(0);
+            results.insert(BetaResult::SrcPortRandom, confidence);
         }
 
         results.into_iter()
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum BetaResult {
-    Inconclusive,
+    Unknown,
+    SrcPortAsOrig,
+    SrcPortConstantDiffToOrig,
+    SrcPortCloseToOrig,
+    SrcPortRandom,
 }
 
 pub struct BetaManager {
