@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
 
     let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
     let buf = args.id.as_bytes();
-    for port in shared::PORT_BASE..(shared::PORT_BASE + shared::PORT_COUNT) {
+    for port in shared::PORT_BASE..(shared::PORT_BASE + (shared::PORT_COUNT - 1)) {
         let addr = ("127.0.0.1", port);
         socket.send_to(buf, addr).await?;
     }

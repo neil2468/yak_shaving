@@ -11,6 +11,7 @@ use tokio::{net::UdpSocket, task::JoinSet, time::sleep};
 use tracing::info;
 
 const PORTS: std::ops::RangeInclusive<u16> = 4000..=4009;
+const THRESHOLD_PERCENT: usize = 80;
 
 pub struct PeerData {
     rx_events: Vec<(SocketAddr, Instant)>,
@@ -46,7 +47,8 @@ impl PeerData {
     }
 
     pub fn test_complete(&self) -> bool {
-        self.rx_events.len() == PORTS.len() // TODO: allow some wiggle room for missed packets
+        let threshold = PORTS.len() * THRESHOLD_PERCENT / 100;
+        self.rx_events.len() >= threshold
     }
 
     pub fn ip_stats(&self) -> HashMap<IpAddr, usize> {
@@ -71,36 +73,39 @@ impl PeerData {
         map
     }
 
-    pub fn analysis(&self) -> Option<AlphaResult> {
-        // If tests not complete
-        if self.test_complete() == false {
-            return None;
-        }
+    pub fn analysis(&self) -> impl Iterator<Item = (AlphaResult, usize)> {
+        // (alpha_result, confidence 0..100)
+        let mut results: Vec<(AlphaResult, usize)> = Vec::new(); //
+        results.push((AlphaResult::Inconclusive, THRESHOLD_PERCENT));
 
-        // Prep work
-        let test_count = self.test_count();
-        const THRESHOLD_PERCENT: usize = 80;
-        let threshold = test_count * THRESHOLD_PERCENT / 100;
-        let mut map: HashMap<SocketAddr, usize> = HashMap::new();
-        for (addr, _) in &self.rx_events {
-            map.entry(addr.clone())
-                .and_modify(|count| *count += 1)
-                .or_insert(1);
-        }
-
-        // Was the NAT source IP and port the same >= THRESHOLD_PERCENT?
-        for (addr, count) in &map {
-            if count >= &threshold {
-                return Some(AlphaResult::NatSrcConstant(addr.ip(), addr.port()));
+        if self.test_complete() {
+            // Prep work
+            let test_count = self.test_count();
+            let mut map: HashMap<SocketAddr, usize> = HashMap::new();
+            for (addr, _) in &self.rx_events {
+                map.entry(addr.clone())
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
             }
+
+            // Was the NAT source IP and port mostly the same
+            for (addr, count) in &map {
+                results.push((
+                    AlphaResult::NatSrcConstant(addr.ip(), addr.port()),
+                    test_count * 100 / count,
+                ))
+            }
+
+            // Was the NAT source IP and port mostly different
+            let count = map.iter().filter(|(_, &count)| count == 1).count();
+
+            results.push((
+                AlphaResult::NatSrcInconstant,
+                usize::checked_div(test_count * 100, count).unwrap_or(0),
+            ));
         }
 
-        // Was the NAT source IP and port different >= THRESHOLD_PERCENT?
-        if map.iter().filter(|(_, &count)| count == 1).count() >= threshold {
-            return Some(AlphaResult::NatSrcInconstant);
-        }
-
-        return Some(AlphaResult::Inconclusive);
+        results.into_iter()
     }
 }
 

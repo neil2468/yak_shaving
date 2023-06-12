@@ -50,7 +50,14 @@ async fn monitor_task(mng: Arc<AlphaManager>) -> anyhow::Result<()> {
                 info!("    elapsed: {:?}", instant.elapsed());
             }
 
-            info!("    analysis: {:?}", peer_data.analysis());
+            info!("    analysis...");
+            for x in peer_data.analysis() {
+                info!("      {:?}", x);
+            }
+            info!(
+                "    conclusion: {:?}",
+                peer_data.analysis().max_by_key(|x| x.1)
+            );
 
             for (ip, count) in peer_data.ip_stats() {
                 info!("    ip: {}, count {}", ip, count);
