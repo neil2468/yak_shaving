@@ -33,10 +33,15 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Beta tests
-    for _ in 0..shared::BETA_COUNT {
+    for seq_num in 0..shared::BETA_COUNT {
         let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
 
-        let buf = format!("{}#{}", args.id, socket.local_addr().unwrap().port());
+        let buf = format!(
+            "{}#{}#{}",
+            args.id,
+            socket.local_addr().unwrap().port(),
+            seq_num
+        );
         let buf = buf.as_bytes();
 
         let addr = (args.server.clone(), shared::BETA_PORT);

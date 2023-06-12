@@ -15,7 +15,7 @@ const EXPECTED_TEST_COUNT: usize = 10;
 const THRESHOLD_PERCENT: usize = 80;
 
 pub struct PeerData {
-    rx_events: Vec<(SocketAddr, u16, Instant)>,
+    rx_events: Vec<(SocketAddr, u16, u16, Instant)>,
 }
 
 impl PeerData {
@@ -25,20 +25,21 @@ impl PeerData {
         }
     }
 
-    fn with_event(addr: SocketAddr, orig_port: u16) -> Self {
+    fn with_event(addr: SocketAddr, orig_port: u16, seq_num: u16) -> Self {
         let mut s = Self::new();
-        s.record_rx_event(addr, orig_port);
+        s.record_rx_event(addr, orig_port, seq_num);
         s
     }
 
-    fn record_rx_event(&mut self, addr: SocketAddr, orig_port: u16) {
-        self.rx_events.push((addr, orig_port, Instant::now()));
+    fn record_rx_event(&mut self, addr: SocketAddr, orig_port: u16, seq_num: u16) {
+        self.rx_events
+            .push((addr, orig_port, seq_num, Instant::now()));
     }
 
     pub fn most_recent(&self) -> Option<Instant> {
         self.rx_events
             .iter()
-            .map(|(_, _, instant)| instant)
+            .map(|(_, _, _, instant)| instant)
             .max()
             .copied()
     }
@@ -48,16 +49,16 @@ impl PeerData {
     }
 
     pub fn test_complete(&self) -> bool {
-        // TODO: allow for missied UDP packets, but the way below is not the way
+        // TODO: allow for missed UDP packets, but the way below is not the way
         // we should go, I think
         let threshold = EXPECTED_TEST_COUNT * THRESHOLD_PERCENT / 100;
         self.rx_events.len() >= threshold
     }
 
-    pub fn rx_events(&self) -> impl Iterator<Item = (&SocketAddr, &u16)> {
+    pub fn rx_events(&self) -> impl Iterator<Item = (&SocketAddr, &u16, &u16)> {
         self.rx_events
             .iter()
-            .map(|(addr, orig_port, _)| (addr, orig_port))
+            .map(|(addr, orig_port, seq_num, _)| (addr, orig_port, seq_num))
     }
 
     pub fn analysis(&self) -> impl Iterator<Item = (BetaResult, usize)> {
@@ -71,7 +72,7 @@ impl PeerData {
 
             // map: <nat_port - orig_port, count>
             let mut map: HashMap<i32, usize> = HashMap::new();
-            for (addr, orig_port, _) in &self.rx_events {
+            for (addr, orig_port, _, _) in &self.rx_events {
                 let diff = addr.port() as i32 - *orig_port as i32;
                 map.entry(diff).and_modify(|count| *count += 1).or_insert(1);
             }
@@ -104,26 +105,61 @@ impl PeerData {
             let confidence = usize::checked_div(count * 100, test_count).unwrap_or(0);
             results.insert(BetaResult::SrcPortCloseToOrig, confidence);
 
-            // Did the NAT use random ports?
-            let count = match map.len() {
-                0 | 1 => 0,
-                l => l,
+            // Did the NAT use ports on a round robin basis?
+
+            // Did NAT use a narrow range of ports?
+            // TODO: this does not handle wrap around
+            // TODO: could optimize by using itertools?
+            let port_max = self
+                .rx_events
+                .iter()
+                .map(|(addr, _, _, _)| addr.port())
+                .max()
+                .unwrap();
+            let port_min = self
+                .rx_events
+                .iter()
+                .map(|(addr, _, _, _)| addr.port())
+                .min()
+                .unwrap();
+            let confidence = if (port_max - port_min) as usize == self.rx_events.len() {
+                100
+            } else {
+                0
             };
-            let confidence = usize::checked_div(count * 100, test_count).unwrap_or(0);
-            results.insert(BetaResult::SrcPortRandom, confidence);
+            results.insert(BetaResult::SrcPortNarrowRange, confidence);
+
+            // Did the NAT use random ports?
+            // let count = match map.len() {
+            //     0 | 1 => 0,
+            //     l => l,
+            // };
+            // let confidence = usize::checked_div(count * 100, test_count).unwrap_or(0);
+            // results.insert(BetaResult::SrcPortRandom, confidence);
         }
 
         results.into_iter()
     }
 }
 
+// TODO: purpose of this result is to decide which port to expect NAT to use with
+// other peer. Useful options are, an exact port, a narrow port range, a wide port
+// range (for is random and we do what we can).
+
+// TODO: Could also have 'narrow range, but expect to be not less than previously
+// used (with wrapping)'? - NarrowRangeDataPointIsStart, NarrowRangeDataPointIsCenter.
+
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum BetaResult {
     Unknown,
     SrcPortAsOrig,
-    SrcPortConstantDiffToOrig,
+    SrcPortConstantDiffToOrig, // TODO: same use as SrcPortAsOrig?
     SrcPortCloseToOrig,
-    SrcPortRandom,
+    SrcPortRoundRobin, // TODO: AKA CloseToPrev
+    SrcPortRoundRobinWithGaps,
+    SrcPortNarrowRange,
+    SrcPortWideRange,
+    SrcPortRandom, // TODO: Is this unknown?
 }
 
 pub struct BetaManager {
@@ -182,12 +218,17 @@ impl BetaManager {
                 .next()
                 .expect("unexpected error")
                 .parse()
-                .expect("failed to parse port number");
+                .expect("failed to parse payload");
+            let seq_num: u16 = parts
+                .next()
+                .expect("unexpected error")
+                .parse()
+                .expect("failed to parse payload");
 
             // Record event
             data.entry(String::from(id))
-                .and_modify(|peer_data| peer_data.record_rx_event(addr, orig_port))
-                .or_insert(PeerData::with_event(addr, orig_port));
+                .and_modify(|peer_data| peer_data.record_rx_event(addr, orig_port, seq_num))
+                .or_insert(PeerData::with_event(addr, orig_port, seq_num));
         }
     }
 }
