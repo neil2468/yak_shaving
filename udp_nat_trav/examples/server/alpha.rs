@@ -8,7 +8,7 @@ use std::{
 
 use dashmap::DashMap;
 use tokio::{net::UdpSocket, task::JoinSet, time::sleep};
-use tracing::info;
+use tracing::{info, trace};
 
 const PORTS: std::ops::RangeInclusive<u16> = 4000..=4009;
 const THRESHOLD_PERCENT: usize = 80;
@@ -53,6 +53,12 @@ impl PeerData {
 
     pub fn rx_events(&self) -> impl Iterator<Item = &SocketAddr> {
         self.rx_events.iter().map(|(addr, _)| addr)
+    }
+
+    pub fn conclusion(&self) -> Option<AlphaResult> {
+        self.analysis()
+            .max_by_key(|x| x.1)
+            .and_then(|(res, _)| Some(res))
     }
 
     pub fn analysis(&self) -> impl Iterator<Item = (AlphaResult, usize)> {
@@ -147,7 +153,7 @@ impl AlphaManager {
         loop {
             let (len, addr) = socket.recv_from(&mut buf).await?;
             let id = str::from_utf8(&buf[..len])?; // TODO: should not allow a utf8 issue stop the loop
-            info!("Rx on {}: {}", port, id);
+            trace!("Rx on {}: {}", port, id);
 
             // Record event
             data.entry(String::from(id))

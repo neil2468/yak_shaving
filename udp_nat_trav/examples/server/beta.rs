@@ -8,7 +8,7 @@ use std::{
 
 use dashmap::DashMap;
 use tokio::{net::UdpSocket, task::JoinSet, time::sleep};
-use tracing::info;
+use tracing::{info, trace};
 
 const PORT: u16 = 4010;
 const EXPECTED_TEST_COUNT: usize = 10;
@@ -61,6 +61,12 @@ impl PeerData {
             .map(|(addr, orig_port, seq_num, _)| (addr, orig_port, seq_num))
     }
 
+    pub fn conclusion(&self) -> Option<BetaResult> {
+        self.analysis()
+            .max_by_key(|x| x.1)
+            .and_then(|(res, _)| Some(res))
+    }
+
     pub fn analysis(&self) -> impl Iterator<Item = (BetaResult, usize)> {
         // (alpha_result, confidence 0..100)
         let mut results: HashMap<BetaResult, usize> = HashMap::new();
@@ -110,7 +116,6 @@ impl PeerData {
                 .map(|(addr, _, seq_num, _)| (addr, seq_num))
                 .collect();
             tmp.sort_by_key(|x| x.1);
-            info!("XXX tmp: {:?}", tmp);
             let mut diffs = Vec::with_capacity(tmp.len() - 1);
             let mut iter = tmp.iter().map(|(&addr, _)| addr.port());
             if let Some(mut prev) = iter.next() {
@@ -119,8 +124,6 @@ impl PeerData {
                     prev = next;
                 }
             }
-
-            info!("XXX diffs: {:?}", diffs);
 
             let count = diffs.iter().filter(|&d| d <= &5000).count(); // TODO: magic number
             let confidence = usize::checked_div(count * 100, diffs.len()).unwrap_or(0);
@@ -151,12 +154,12 @@ pub enum BetaResult {
     Unknown,
     SrcPortAsOrig,
     SrcPortConstantDiffToOrig, // TODO: same use as SrcPortAsOrig?
-    SrcPortCloseToOrig,
-    SrcPortRoundRobin, // TODO: AKA CloseToPrev
-    SrcPortRoundRobinWithGaps,
-    SrcPortNarrowRange,
-    SrcPortWideRange,
-    SrcPortRandom, // TODO: Is this unknown?
+    SrcPortCloseToOrig, // TODO: Valid but if this and SrcPorAsOrig are 100% AsOrig takes priority
+    SrcPortRoundRobin,  // TODO: AKA CloseToPrev
+                        // SrcPortRoundRobinWithGaps,
+                        // SrcPortNarrowRange,
+                        // SrcPortWideRange,
+                        // SrcPortRandom, // TODO: Is this unknown?
 }
 
 pub struct BetaManager {
@@ -206,7 +209,7 @@ impl BetaManager {
         loop {
             let (len, addr) = socket.recv_from(&mut buf).await?;
             let payload = str::from_utf8(&buf[..len])?; // TODO: should not allow a utf8 issue stop the loop
-            info!("Rx on {}: {}", port, payload);
+            trace!("Rx on {}: {}", port, payload);
 
             // Parse payload
             let mut parts = payload.split('#');
