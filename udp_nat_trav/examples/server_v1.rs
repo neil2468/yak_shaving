@@ -83,6 +83,21 @@ async fn api_task(
                             .data()
                             .get(peer_id)
                             .and_then(|peer_data| peer_data.conclusion());
+
+                        if let (
+                            Some(id_alpha),
+                            Some(id_beta),
+                            Some(peer_id_alpha),
+                            Some(peer_id_beta),
+                        ) = (
+                            id_alpha_conclusion,
+                            id_beta_conclusion,
+                            peer_id_alpha_conclusion,
+                            peer_id_beta_conclusion,
+                        ) {
+                            info!("{}: {:?} {:?}", id, id_alpha, id_beta);
+                            info!("{}: {:?} {:?}", peer_id, peer_id_alpha, peer_id_beta);
+                        }
                     }
                     _ => todo!(),
                 }
