@@ -14,7 +14,7 @@ const PEER_ID: &str = "alice";
 const JUST_IN_CASE: usize = 3;
 
 // TODO: Constants to rename
-const ALPHA: usize = 220;
+const ALPHA: usize = 1000;
 const BETA: usize = 1024;
 
 #[derive(Parser, Debug)]

@@ -35,7 +35,9 @@ async fn main() -> anyhow::Result<()> {
     while attempt < 300 {
         let socket = UdpSocket::bind("0.0.0.0:0").await?;
         let port = socket.local_addr()?.port();
-        if ports.insert(port) {
+        if ports.insert(port) == false {
+            info!("Avoiding port reuse <<<<<<<<<<<<<<<<<");
+        } else {
             attempt += 1;
             info!("Attempt {}. Send ping from {}", attempt, port);
 
@@ -45,9 +47,9 @@ async fn main() -> anyhow::Result<()> {
                     .send_to(format!("ping#{}", attempt).as_bytes(), args.peer_addr)
                     .await?;
             }
-
             sleep(Duration::from_millis(100)).await;
         }
+        drop(socket);
     }
     Ok(())
 }
